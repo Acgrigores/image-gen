@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 # === CONFIG ===
-IMG_SIZE = 256
-INITIAL_MUTATION_SCALE = 0.04
+IMG_SIZE = 128
+INITIAL_MUTATION_SCALE = 0.018
 MIN_MUTATION_SCALE = 0.001
 
 # === Load and preprocess target ===
@@ -33,32 +33,37 @@ def save_current(image):
 # === MAIN ===
 def main():
     target = load_target_image("image.png")
-    weights = load_target_image("start.jpg")
-    mutation_scale = INITIAL_MUTATION_SCALE
-    step = 0
+    weights = np.random.rand(IMG_SIZE, IMG_SIZE, 3)
     frames = []
-    global MIN_MUTATION_SCALE
-    while True:
-        step += 1
-        current_score = similarity_score(weights, target)
+    rows_per_group = 4
+    weights_list = []
+    for i in range(0, IMG_SIZE, rows_per_group):
+        mutation_scale = INITIAL_MUTATION_SCALE
+        if(i + rows_per_group) > IMG_SIZE:
+            rows_per_group = IMG_SIZE - i
+        past_score = similarity_score(weights[i:i+rows_per_group], target[i:i+rows_per_group]) * 4
+        while True:
+            current_score = similarity_score(weights[i:i+rows_per_group], target[i:i+rows_per_group])
 
-        # Try mutations and keep best if better
-        for _ in range(1000):
-            weights = mutate(weights, mutation_scale, target, current_score)
-            mutation_scale = max(mutation_scale * 0.9995, MIN_MUTATION_SCALE)
+            # Try mutations and keep best if better
+            for _ in range(5):
+                weights[i:i+rows_per_group] = mutate(weights[i:i+rows_per_group], mutation_scale, target[i:i+rows_per_group], current_score)
+                current_score = similarity_score(weights[i:i+rows_per_group], target[i:i+rows_per_group])
+            mutation_scale = max(mutation_scale * 0.9, MIN_MUTATION_SCALE)
 
-        # print(f"[{step}] Score: {current_score:.5f} | Mutation: {mutation_scale:.4f}")
-        frame = save_current(weights)
+            # print(f"[{step}] Score: {current_score:.5f} | Mutation: {mutation_scale:.4f}")
+            if(past_score / 4 <= current_score):
+                past_score = current_score
+                weights_list.append(weights.copy())
+                print(f"score: {current_score}")
+            
+            if current_score > -0.001:
+                print(f"Target {i/rows_per_group} matched well. Moving on!")
+                break
+    print("gififying!")
+    for weight in weights_list:
+        frame = save_current(weight)
         frames.append(frame)
-
-        if(step % 10 == 0):
-            print("gif saved!")
-            mutation_scale = (INITIAL_MUTATION_SCALE + mutation_scale) / 2
-            frames[0].save("evolution.gif", save_all=True, append_images=frames[1:], duration=100, loop=0)
-        
-        if current_score > -0.001:
-            print("Target matched well. Stopping.")
-            frames[0].save("evolution.gif", save_all=True, append_images=frames[1:], duration=100, loop=0)
-            break
+    frames[0].save("evolution.gif", save_all=True, append_images=frames[1:], duration=100, loop=0)
 
 main()
